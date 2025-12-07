@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <title>Shader Live Coding</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Local CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <!-- CodeMirror -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+</head>
+
+<body>
+  <div class="page">
+
+    <header class="header">
+      <h1>Shader Live Coding</h1>
+      <button id="theme-toggle">Dark mode</button>
+    </header>
+
+    <main class="main">
+
+      <section class="editor-panel">
+        <div class="editor-header">
+          <span>Fragment Shader (GLSL)</span>
+
+          <select id="shader-preset">
+            <option value="default">Rings</option>
+            <option value="plasma">Plasma</option>
+            <option value="gradient">Gradient</option>
+            <option value="mouse_ripple">Mouse Ripple</option>
+          </select>
+        </div>
+
+        <textarea id="shader-editor"></textarea>
+        <div id="error-log"></div>
+      </section>
+
+      <section class="preview-panel">
+        <canvas id="shader-canvas"></canvas>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
