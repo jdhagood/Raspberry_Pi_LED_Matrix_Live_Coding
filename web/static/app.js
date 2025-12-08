@@ -137,6 +137,12 @@ document.addEventListener("DOMContentLoaded", () => {
   requestAnimationFrame(renderLoop);
 });
 
+
+
+let lastSentTime = 0;
+const SEND_INTERVAL_MS = 50; // 20 fps cap
+
+
 /* THEME HANDLING */
 
 function initTheme() {
@@ -258,11 +264,12 @@ function initEvents() {
 
 function resizeCanvasToElement() {
   if (!canvas) return;
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
+  const w = 256;
+  const h = 192;
+  canvas.width = w;
+  canvas.height = h;
 }
+
 
 /* COMPILATION */
 
@@ -352,10 +359,50 @@ function renderLoop() {
     }
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+// Send this frame to the Pi LED panel (throttled)
+    sendFrameToServer();
   }
 
   requestAnimationFrame(renderLoop);
 }
+
+function sendFrameToServer() {
+  if (!gl || !canvas) return;
+
+  const now = performance.now();
+  if (now - lastSentTime < SEND_INTERVAL_MS) {
+    return; // throttle
+  }
+  lastSentTime = now;
+
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const pixels = new Uint8Array(w * h * 4);  // RGBA
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+  // Convert to RGB only
+  const rgb = new Array(w * h * 3);
+  let src = 0;
+  let dst = 0;
+  for (let i = 0; i < w * h; i++) {
+    rgb[dst++] = pixels[src++]; // R
+    rgb[dst++] = pixels[src++]; // G
+    rgb[dst++] = pixels[src++]; // B
+    src++;                      // skip A
+  }
+
+  fetch("/frame", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ w, h, data: rgb })
+  }).catch((err) => {
+    // silently ignore; LED panel failing shouldn't break UI
+    console.error("Failed to send frame:", err);
+  });
+}
+
 
 /* LOGGING */
 

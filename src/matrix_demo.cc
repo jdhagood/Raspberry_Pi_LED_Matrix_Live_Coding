@@ -1,54 +1,79 @@
-// src/matrix_demo.cc
-// Small example using hzeller/rpi-rgb-led-matrix with a single 64x64 panel.
-
 #include "led-matrix.h"
 
 #include <unistd.h>
-#include <math.h>
-#include <stdio.h>
 #include <signal.h>
+#include <cstdio>
 
 using rgb_matrix::RGBMatrix;
 using rgb_matrix::Canvas;
 
 volatile bool interrupt_received = false;
-static void InterruptHandler(int signo) {
+static void InterruptHandler(int) {
   interrupt_received = true;
 }
 
-static void DrawOnCanvas(Canvas *canvas) {
-  canvas->Fill(0, 0, 255);  // blue background
+static void PanelColor(int idx, uint8_t &r, uint8_t &g, uint8_t &b) {
+  switch (idx) {
+    case 0:  r = 255; g = 0;   b = 0;   break; // red
+    case 1:  r = 0;   g = 255; b = 0;   break; // green
+    case 2:  r = 0;   g = 0;   b = 255; break; // blue
+    case 3:  r = 255; g = 255; b = 0;   break; // yellow
+    case 4:  r = 255; g = 0;   b = 255; break; // magenta
+    case 5:  r = 0;   g = 255; b = 255; break; // cyan
+    case 6:  r = 255; g = 128; b = 0;   break;
+    case 7:  r = 128; g = 0;   b = 255; break;
+    case 8:  r = 128; g = 128; b = 128; break;
+    case 9:  r = 255; g = 255; b = 255; break;
+    case 10: r = 128; g = 255; b = 0;   break;
+    case 11: r = 0;   g = 128; b = 255; break;
+    default: r = g = b = 0;             break;
+  }
+}
 
-  const int center_x = canvas->width() / 2;
-  const int center_y = canvas->height() / 2;
-  const float radius_max = canvas->width() / 2.0f;
-  const float angle_step = 1.0f / 360.0f;
+static void DrawPanels(Canvas *canvas) {
+  const int panel_w = 64;
+  const int panel_h = 64;
+  const int grid_cols = 4;
+  const int grid_rows = 3;
 
-  for (float a = 0.0f, r = 0.0f; r < radius_max; a += angle_step, r += angle_step) {
-    if (interrupt_received)
-      return;
+  const int width  = canvas->width();   // should be 256
+  const int height = canvas->height();  // should be 192
 
-    const float dot_x = cosf(a * 2.0f * M_PI) * r;
-    const float dot_y = sinf(a * 2.0f * M_PI) * r;
+  std::fprintf(stderr, "Canvas size: %dx%d\n", width, height);
 
-    canvas->SetPixel(center_x + (int)dot_x,
-                     center_y + (int)dot_y,
-                     255, 0, 0);  // red spiral
+  canvas->Fill(0, 0, 0);
 
-    usleep(1 * 1000);  // slow down a bit
+  for (int row = 0; row < grid_rows; ++row) {
+    for (int col = 0; col < grid_cols; ++col) {
+      int idx = row * grid_cols + col; // 0..11
+      uint8_t r, g, b;
+      PanelColor(idx, r, g, b);
+
+      int x0 = col * panel_w;
+      int y0 = row * panel_h;
+
+      for (int y = 0; y < panel_h; ++y) {
+        for (int x = 0; x < panel_w; ++x) {
+          canvas->SetPixel(x0 + x, y0 + y, r, g, b);
+        }
+      }
+    }
+  }
+
+  // Keep image displayed
+  while (!interrupt_received) {
+    usleep(100 * 1000);
   }
 }
 
 int main(int argc, char *argv[]) {
   RGBMatrix::Options defaults;
-  defaults.hardware_mapping = "regular";  // change if you use a HAT ("adafruit-hat", etc.)
-  defaults.rows = 64;                     // each panel is 64 rows
-  defaults.chain_length = 1;              // one panel in the chain
-  defaults.parallel = 1;                  // one chain
+  defaults.hardware_mapping = "regular";
+  defaults.rows         = 64;
+  defaults.cols         = 64;
+  defaults.chain_length = 4;
+  defaults.parallel     = 3;
   defaults.show_refresh_rate = true;
-
-  // Some 64x64 panels need this; you can tweak on command-line instead if needed.
-  // defaults.multiplexing = 0;  // auto / default
 
   Canvas *canvas = RGBMatrix::CreateFromFlags(&argc, &argv, &defaults);
   if (canvas == nullptr)
@@ -57,7 +82,7 @@ int main(int argc, char *argv[]) {
   signal(SIGTERM, InterruptHandler);
   signal(SIGINT,  InterruptHandler);
 
-  DrawOnCanvas(canvas);
+  DrawPanels(canvas);
 
   canvas->Clear();
   delete canvas;

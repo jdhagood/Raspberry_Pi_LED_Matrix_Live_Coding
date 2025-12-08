@@ -67,9 +67,13 @@ button {
 
 #shader-canvas {
   width: 100%;
-  height: 100%;
-  background: black;
+  max-width: 100%;
+  aspect-ratio: 256 / 192; /* instead of 16/9 */
+  border-radius: 6px;
+  border: 1px solid var(--canvas-border);
+  background-color: #000000;
 }
+
 
 .CodeMirror {
   flex: 1;
