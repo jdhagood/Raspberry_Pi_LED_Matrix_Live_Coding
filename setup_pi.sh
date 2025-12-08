@@ -16,10 +16,9 @@ sudo apt install -y \
   python3-pil \
   libjpeg-dev \
   libopenjp2-7 \
-  libtiff5 \
-  libatlas-base-dev \
   libwebp-dev \
   unzip
+
 
 # -------------------------
 # 2. Git submodules
@@ -64,17 +63,26 @@ echo ""
 echo "IMPORTANT SYSTEM TUNING (DO MANUALLY):"
 echo ""
 echo "1) Disable built-in audio:"
-echo "   sudo nano /boot/config.txt"
+echo "   sudo nano /boot/firmware/config.txt"
 echo "   add:"
 echo "     dtparam=audio=off"
 echo ""
 echo "2) Add CPU isolation to:"
-echo "   sudo nano /boot/cmdline.txt"
+echo "   sudo nano /boot/firmware/cmdline.txt"
 echo "   add at end of line:"
 echo "     isolcpus=3"
 echo ""
 echo "3) Reboot after this:"
 echo "   sudo reboot"
 echo ""
+
+# ---------------
+# 8. Blacklisting Pi Audio Drivers
+# ----------------
+echo "blacklist snd_bcm2835"           | sudo tee  /etc/modprobe.d/blacklist-rgbmatrix-audio.conf
+echo "blacklist snd_soc_hdmi_codec"    | sudo tee -a /etc/modprobe.d/blacklist-rgbmatrix-audio.conf
+echo "blacklist snd_soc_core"          | sudo tee -a /etc/modprobe.d/blacklist-rgbmatrix-audio.conf
+
+
 
 echo "=== Setup Complete ==="
