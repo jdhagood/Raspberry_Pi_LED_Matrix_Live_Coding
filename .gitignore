@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+*.pyc
+bin/
 
 # Node
 node_modules/
