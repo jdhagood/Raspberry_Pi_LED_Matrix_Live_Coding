@@ -81,7 +81,7 @@ enum ShaderType {
 };
 
 int main(int argc, char *argv[]) {
-  ShaderType shader = SHADER_RINGS;
+  ShaderType shader = SHADER_PLASMA;
   if (argc > 1) {
     if (std::string(argv[1]) == "plasma") {
       shader = SHADER_PLASMA;
@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
   signal(SIGTERM, InterruptHandler);
   signal(SIGINT,  InterruptHandler);
 
-  const float target_fps = 30.0f;   // you can try 60.0f and see how it feels
+  const float target_fps = 1200.0f;   // you can try 60.0f and see how it feels
   const float frame_dt   = 1.0f / target_fps;
   const useconds_t frame_us = (useconds_t)(frame_dt * 1e6);
 

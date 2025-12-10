@@ -2,9 +2,10 @@
 // Features:
 // - CodeMirror with GLSL highlighting
 // - Ctrl+S / Cmd+S to compile
-// - Fixed-size preview canvas
+// - Fixed-size preview canvas (256x192 to match LED wall)
 // - Dark/light mode toggle
 // - Preset shader dropdown
+// - Audio FFT capture on client, sent to Pi
 
 /* PRESET SHADERS */
 
@@ -121,6 +122,101 @@ uniform vec2  u_mouse;
 varying vec2  v_uv;
 `;
 
+/* AUDIO FFT CAPTURE (on the client browser) */
+
+let audioContext = null;
+let analyser = null;
+let fftDataArray = null;
+let audioCaptureStarted = false;
+
+const FFT_SIZE = 1024;           // power of two; gives 512 bins
+const NUM_BINS = 32;             // how many bands we send to the Pi
+const AUDIO_POST_INTERVAL_MS = 50; // ~20 fps
+
+let lastAudioPostTime = 0;
+
+async function initAudioCapture() {
+  if (audioCaptureStarted) return;
+  audioCaptureStarted = true;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioContext.createMediaStreamSource(stream);
+
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = FFT_SIZE;
+    analyser.smoothingTimeConstant = 0.7;  // higher = smoother
+
+    const bufferLength = analyser.frequencyBinCount; // FFT_SIZE / 2
+    fftDataArray = new Uint8Array(bufferLength);
+    source.connect(analyser);
+
+    console.log("Audio capture initialized. FFT bins:", bufferLength);
+  } catch (err) {
+    console.error("Error initializing audio capture:", err);
+  }
+}
+
+/* Compute downsampled FFT and POST to /audio */
+
+function computeAndSendFFT(now) {
+  if (!analyser || !fftDataArray) return;
+
+  if (now - lastAudioPostTime < AUDIO_POST_INTERVAL_MS) {
+    return; // throttle
+  }
+  lastAudioPostTime = now;
+
+  analyser.getByteFrequencyData(fftDataArray); // 0–255 mags
+
+  const step = Math.floor(fftDataArray.length / NUM_BINS);
+  const bands = [];
+  for (let i = 0; i < NUM_BINS; i++) {
+    let sum = 0;
+    let count = 0;
+    const start = i * step;
+    const end = Math.min(start + step, fftDataArray.length);
+    for (let j = start; j < end; j++) {
+      sum += fftDataArray[j];
+      count++;
+    }
+    const avg = count > 0 ? sum / count : 0;
+    bands.push(avg / 255.0); // normalize to [0,1]
+  }
+
+  fetch("/audio", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fft: bands })
+  }).catch((err) => {
+    console.error("Error sending FFT:", err);
+  });
+}
+
+/* Send GLSL source to Pi on compile */
+
+function sendShaderToPi(src) {
+  fetch("/shader", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source: src })
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      if (!data.ok) {
+        console.error("Shader upload error:", data.error);
+      } else {
+        console.log("Shader sent to Pi");
+      }
+    })
+    .catch((err) => {
+      console.error("Error sending shader:", err);
+    });
+}
+
+/* DOM READY */
+
 document.addEventListener("DOMContentLoaded", () => {
   canvas = document.getElementById("shader-canvas");
   errorLog = document.getElementById("error-log");
@@ -131,17 +227,12 @@ document.addEventListener("DOMContentLoaded", () => {
   initEditor();
   initGL();
   initEvents();
+  initAudioCapture();  // start audio capture as soon as possible
 
   // Compile once at startup
   compileAndUseShader(cmEditor.getValue());
   requestAnimationFrame(renderLoop);
 });
-
-
-
-let lastSentTime = 0;
-const SEND_INTERVAL_MS = 50; // 20 fps cap
-
 
 /* THEME HANDLING */
 
@@ -177,10 +268,14 @@ function initEditor() {
       : "default",
     extraKeys: {
       "Ctrl-S": function (cm) {
-        compileAndUseShader(cm.getValue());
+        const src = cm.getValue();
+        compileAndUseShader(src);
+        sendShaderToPi(src);
       },
       "Cmd-S": function (cm) {
-        compileAndUseShader(cm.getValue());
+        const src = cm.getValue();
+        compileAndUseShader(src);
+        sendShaderToPi(src);
       }
     }
   });
@@ -245,6 +340,7 @@ function initEvents() {
     const src = PRESETS[key] || DEFAULT_FRAGMENT_SOURCE;
     cmEditor.setValue(src);
     compileAndUseShader(cmEditor.getValue());
+    sendShaderToPi(src);
   });
 
   themeToggle.addEventListener("click", () => {
@@ -264,12 +360,10 @@ function initEvents() {
 
 function resizeCanvasToElement() {
   if (!canvas) return;
-  const w = 256;
-  const h = 192;
-  canvas.width = w;
-  canvas.height = h;
+  // Lock preview size to LED wall resolution (256x192)
+  canvas.width = 256;
+  canvas.height = 192;
 }
-
 
 /* COMPILATION */
 
@@ -333,7 +427,7 @@ function compileShader(type, src) {
 
 /* RENDER LOOP */
 
-function renderLoop() {
+function renderLoop(now) {
   if (gl && currentProgram && canvas) {
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -359,50 +453,13 @@ function renderLoop() {
     }
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-// Send this frame to the Pi LED panel (throttled)
-    sendFrameToServer();
   }
+
+  // Send audio FFT to Pi (client-side capture)
+  computeAndSendFFT(now || performance.now());
 
   requestAnimationFrame(renderLoop);
 }
-
-function sendFrameToServer() {
-  if (!gl || !canvas) return;
-
-  const now = performance.now();
-  if (now - lastSentTime < SEND_INTERVAL_MS) {
-    return; // throttle
-  }
-  lastSentTime = now;
-
-  const w = canvas.width;
-  const h = canvas.height;
-
-  const pixels = new Uint8Array(w * h * 4);  // RGBA
-  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-
-  // Convert to RGB only
-  const rgb = new Array(w * h * 3);
-  let src = 0;
-  let dst = 0;
-  for (let i = 0; i < w * h; i++) {
-    rgb[dst++] = pixels[src++]; // R
-    rgb[dst++] = pixels[src++]; // G
-    rgb[dst++] = pixels[src++]; // B
-    src++;                      // skip A
-  }
-
-  fetch("/frame", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ w, h, data: rgb })
-  }).catch((err) => {
-    // silently ignore; LED panel failing shouldn't break UI
-    console.error("Failed to send frame:", err);
-  });
-}
-
 
 /* LOGGING */
 

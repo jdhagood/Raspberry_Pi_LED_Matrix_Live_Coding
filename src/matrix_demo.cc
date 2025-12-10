@@ -47,7 +47,7 @@ static void DrawPanels(Canvas *canvas) {
     for (int col = 0; col < grid_cols; ++col) {
       int idx = row * grid_cols + col; // 0..11
       uint8_t r, g, b;
-      PanelColor(idx, r, g, b);
+      PanelColor(2, r, g, b);
 
       int x0 = col * panel_w;
       int y0 = row * panel_h;

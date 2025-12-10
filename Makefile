@@ -22,3 +22,30 @@ clean:
 
 .PHONY: all clean
 
+
+
+
+
+
+
+
+CXX      = g++
+CXXFLAGS = -std=c++17 -O3 -Wall -Iexternal/rpi-rgb-led-matrix/include
+LDFLAGS  = -Lexternal/rpi-rgb-led-matrix/lib -lrgbmatrix -lrt -lm -lpthread
+
+all: bin/matrix_demo bin/matrix_daemon bin/local_shader
+
+bin/matrix_demo: src/matrix_demo.cc
+	mkdir -p bin
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
+
+bin/matrix_daemon: src/matrix_daemon.cc
+	mkdir -p bin
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
+
+bin/local_shader: src/local_shader.cc
+	mkdir -p bin
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
+
+clean:
+	rm -rf bin
