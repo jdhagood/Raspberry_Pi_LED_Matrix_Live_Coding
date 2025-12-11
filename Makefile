@@ -49,3 +49,16 @@ bin/local_shader: src/local_shader.cc
 
 clean:
 	rm -rf bin
+
+
+
+
+
+bin/udp_matrix_receiver: src/udp_matrix_receiver.cc
+	mkdir -p bin
+	g++ -std=c++17 -O3 -Wall \
+	 -Iexternal/rpi-rgb-led-matrix/include \
+	 src/udp_matrix_receiver.cc \
+	 -o bin/udp_matrix_receiver \
+	 -Lexternal/rpi-rgb-led-matrix/lib \
+	 -lrgbmatrix -lrt -lm -lpthread

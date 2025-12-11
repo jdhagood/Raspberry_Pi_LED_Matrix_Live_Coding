@@ -1,0 +1,7 @@
+sudo ip link set eth0 up
+sudo ip addr flush dev eth0
+sudo ip addr add 192.168.1.48/24 dev eth0
+
+source venv/bin/activate
+sudo ./venv/bin/python udp_led_receiver.py
+
